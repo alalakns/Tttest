@@ -1,3 +1,5 @@
+import os
+import sys
 import re
 import requests
 from bs4 import BeautifulSoup
@@ -7,7 +9,14 @@ import time
 URL = "https://funpay.com/lots/3503/"
 CHECK_INTERVAL = 8
 
-BOT_TOKEN = "7975628480:AAGmyULtVq5j0rdJfustie7lS-25pFfLscU"
+# 🔐 Токен берется из переменных окружения Render
+BOT_TOKEN = os.environ.get('BOT_TOKEN')
+if not BOT_TOKEN:
+    print("❌ КРИТИЧЕСКАЯ ОШИБКА: BOT_TOKEN не найден в переменных окружения!")
+    print("👉 Добавь BOT_TOKEN в Environment Variables на Render")
+    sys.exit(1)
+
+# ✅ ID чатов можно оставить в коде (они не секретные)
 CHAT_IDS = ["6066638745", "7930094492"]
 
 HEADERS = {
@@ -108,19 +117,40 @@ session.headers.update(HEADERS)
 sent_links = set()
 
 def send_telegram(text):
+    """Отправка сообщения в Telegram"""
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    success = False
+    
     for chat_id in CHAT_IDS:
-        session.post(
-            url,
-            data={
-                "chat_id": chat_id,
-                "text": text,
-                "disable_web_page_preview": False
-            },
-            timeout=5
-        )
+        try:
+            response = session.post(
+                url,
+                data={
+                    "chat_id": chat_id,
+                    "text": text,
+                    "disable_web_page_preview": False
+                },
+                timeout=5
+            )
+            if response.status_code == 200:
+                success = True
+                print(f"✅ Отправлено в чат {chat_id}")
+            else:
+                print(f"❌ Ошибка Telegram: {response.status_code}")
+        except Exception as e:
+            print(f"❌ Ошибка отправки: {e}")
+    
+    return success
 
 # ================== ОСНОВНОЙ ЦИКЛ ==================
+print("🚀 FunPay Monitor запущен на Render!")
+print(f"⏱️ Интервал проверки: {CHECK_INTERVAL} сек")
+print(f"📦 Товаров в базе: {len(ITEMS)}")
+print("=" * 50)
+
+# Отправляем тестовое сообщение при запуске
+send_telegram("✅ Бот запущен на Render и начал мониторинг!")
+
 while True:
     start = time.time()
 
@@ -197,9 +227,10 @@ while True:
 
             sent_links.add(cheapest_link)
 
-        print(f"⏱️ Проверка: {round(time.time() - start, 2)} сек\n")
+        elapsed = round(time.time() - start, 2)
+        print(f"⏱️ Проверка #{len(sent_links)}: {elapsed} сек | Найдено: {len(market)} товаров")
 
     except Exception as e:
-        print("Ошибка:", e)
+        print("❌ Ошибка:", e)
 
     time.sleep(CHECK_INTERVAL)
